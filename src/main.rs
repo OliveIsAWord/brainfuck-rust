@@ -3,13 +3,15 @@ use std::num::Wrapping;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-macro_rules! wrap {
-    ($arg:expr) => {Wrapping::<u8>($arg)}
+type CellData = Wrapping::<u8>;
+
+macro_rules! wrap_data {
+    ($arg:expr) => { Wrapping::<u8>($arg) }
 }
 
-const VAL_ZERO: Wrapping::<u8> = wrap!(0);
-const VAL_ONE: Wrapping::<u8> = wrap!(1);
-const VAL_MINUS_ONE: Wrapping::<u8> = wrap!(255);
+const VAL_ZERO: CellData = wrap_data!(0);
+const VAL_ONE: CellData = wrap_data!(1);
+const VAL_MINUS_ONE: CellData = wrap_data!(255);
 
 const DEBUG: bool = false;
 const MAX_OPS: i64 = -1;
@@ -35,9 +37,9 @@ struct Jump {
 }
 
 #[derive(Debug)]
-enum Op<T> {
-    Add(T),
-    Sub(T),
+enum Op {
+    Add(CellData),
+    Sub(CellData),
     Move(isize),
     JumpIfZero(Jump),
     JumpIfNonZero(Jump),
@@ -56,7 +58,7 @@ fn main() {
 
 
 
-    let mut program = Vec::<Op<Wrapping::<u8>>>::new();
+    let mut program = Vec::<Op>::new();
     let mut jump_index: isize = 1;
     let mut jump_stack= Vec::new();
     // TODO: explicitly check unmatched []
@@ -103,9 +105,9 @@ fn main() {
     debugln!("{:?}", jump_map);
 
 
-    let mut input = VecDeque::<Wrapping::<u8>>::new();
+    let mut input = VecDeque::<CellData>::new();
     for c in input_str.chars() {
-        input.push_back(Wrapping::<u8>(c as u8));
+        input.push_back(wrap_data!(c as u8));
     }
 
     //let mut tape = VecDeque::<u8>::new();
