@@ -1,14 +1,22 @@
 #![deny(clippy::all, clippy::nursery)]
 
+// TODO:
+// - Switch to a recursive Loop op rather than Jumps
+// - Actual error handling on interpreter
+// - bounded memory
+// - IR optimization step
+// - Further IR instructions (e.g. set value, multiply, etc.)
+// - Special debug print symbols and IR instructions
+// - Compilation
+
 use std::collections::HashMap;
-//use std::collections::VecDeque;
 use std::io::{self, Write};
 
 type CellData = u8;
 const INPUT_END_VAL: CellData = CellData::MAX;
 
 const DEBUG: bool = false;
-const MAX_OPS: i64 = -1;
+const MAX_OPS: isize = -1;
 
 macro_rules! debugln {
     ($($arg:tt)*) => {
@@ -19,9 +27,6 @@ macro_rules! debugln {
     }
 }
 
-// fn print_type_of<T>(_: &T) {
-//     println!("{}", std::any::type_name::<T>())
-// }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Jump {
@@ -38,7 +43,83 @@ enum Op {
     JumpIfZero(Jump),
     JumpIfNonZero(Jump),
     Input,
-    Print,
+    Output,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProgramState {
+    tape: Vec<CellData>,
+    inst_ptr: usize,
+    tape_ptr: usize,
+    input_ptr: usize,
+    pub output: Vec<CellData>,
+    halted: bool,
+}
+
+impl ProgramState {
+    fn interpret(&mut self, program: &[Op], input: &[CellData], max_ops: isize) {
+        let jump_map = create_jump_map(&program);
+        let mut op_count = 0;
+
+        while self.inst_ptr < program.len() {
+            let p = self.tape.get_mut(self.tape_ptr).unwrap();
+            match program[self.inst_ptr] {
+                Op::Add(amt) => *p = p.wrapping_add(amt),
+                Op::Sub(amt) => *p = p.wrapping_sub(amt),
+                Op::Move(amt) => {
+                    // ptr += amt as ussize
+                    if (amt < 0) & (self.tape_ptr < -amt as usize) {
+                        panic!("instruction pointer underflow at char {}", self.inst_ptr);
+                    }
+                    self.tape_ptr = self.tape_ptr.wrapping_add(amt as usize);
+                    while self.tape_ptr >= self.tape.len() {
+                        self.tape.push(0);
+                    }
+                }
+                Op::Output => {
+                    self.output.push(*p);
+                }
+                Op::Input => {
+                    *p = match input.get(self.input_ptr) {
+                            Some(v) => {
+                                self.input_ptr += 1;
+                                *v
+                            }
+                            None => INPUT_END_VAL,
+                        }
+                }
+                Op::JumpIfZero(Jump { here: _, jump_to }) => {
+                    if *p == 0 {
+                        self.inst_ptr = jump_map[&jump_to];
+                    }
+                }
+                Op::JumpIfNonZero(Jump { here: _, jump_to }) => {
+                    if *p != 0 {
+                        self.inst_ptr = jump_map[&jump_to];
+                    }
+                }
+            }
+            debugln!("{:?} {:?}", program[self.inst_ptr], self.tape);
+            self.inst_ptr += 1;
+            op_count += 1;
+            if (max_ops >= 0) & (op_count > max_ops) {
+                panic!("\nProgram took too long lol");
+            }
+        }
+    }
+}
+
+impl std::default::Default for ProgramState {
+    fn default() -> Self {
+        Self {
+            tape: vec![0],
+            inst_ptr: 0,
+            tape_ptr: 0,
+            input_ptr: 0,
+            output: Vec::new(),
+            halted: false,
+        }
+    }
 }
 
 fn main() {
@@ -52,13 +133,10 @@ fn main() {
 
     let program = parse(program_str);
     debugln!("{:?}", program);
-
-    let mut input = Vec::<CellData>::new();
-    for c in input_str.bytes() {
-        input.push(c);
-    }
-
-    interpret(&program, &input);
+    let input = Vec::<CellData>::from_iter(input_str.bytes());
+    let mut machine = ProgramState::default();
+    machine.interpret(&program, &input, MAX_OPS);
+    println!("{}", std::str::from_utf8(&machine.output).unwrap());
 }
 
 fn parse(program_str: &str) -> Vec<Op> {
@@ -72,7 +150,7 @@ fn parse(program_str: &str) -> Vec<Op> {
             '-' => program.push(Op::Sub(1)),
             '>' => program.push(Op::Move(1)),
             '<' => program.push(Op::Move(-1)),
-            '.' => program.push(Op::Print),
+            '.' => program.push(Op::Output),
             ',' => program.push(Op::Input),
             '[' => {
                 program.push(Op::JumpIfZero(Jump {
@@ -113,58 +191,4 @@ fn create_jump_map(program: &[Op]) -> HashMap<isize, usize> {
         }
     }
     jump_map
-}
-
-
-fn interpret(program: &[Op], input: &[CellData]) {
-    let mut tape: Vec<CellData> = vec![0];
-    let mut ptr: usize = 0;
-    let mut ip: usize = 0;
-    let mut input_idx: usize = 0;
-    let jump_map = create_jump_map(&program);
-
-    let mut op_count = 0;
-    while ip < program.len() {
-        match program[ip] {
-            Op::Add(amt) => tape[ptr] = tape[ptr].wrapping_add(amt),
-            Op::Sub(amt) => tape[ptr] = tape[ptr].wrapping_sub(amt),
-            Op::Move(amt) => {
-                // ptr += amt as ussize
-                if (amt < 0) & (ptr < -amt as usize) {
-                    panic!("instruction pointer underflow at char {}", ip);
-                }
-                ptr = ptr.wrapping_add(amt as usize);
-                while ptr >= tape.len() {
-                    tape.push(0);
-                }
-            }
-            Op::Print => {
-                print!("{}", tape[ptr] as char);
-                io::stdout().flush().unwrap();
-            }
-            Op::Input => match input.get(input_idx) {
-                Some(v) => {
-                    input_idx += 1;
-                    tape[ptr] = *v
-                }
-                None => tape[ptr] = INPUT_END_VAL,
-            },
-            Op::JumpIfZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] == 0 {
-                    ip = jump_map[&jump_to];
-                }
-            }
-            Op::JumpIfNonZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] != 0 {
-                    ip = jump_map[&jump_to];
-                }
-            }
-        }
-        debugln!("{:?} {:?}", program[ip], tape);
-        ip += 1;
-        op_count += 1;
-        if (MAX_OPS > 0) & (op_count > MAX_OPS) {
-            panic!("\nProgram took too long lol");
-        }
-    }
 }
