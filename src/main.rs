@@ -1,7 +1,7 @@
 #![deny(clippy::all, clippy::nursery)]
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
+//use std::collections::VecDeque;
 use std::io::{self, Write};
 
 type CellData = u8;
@@ -51,64 +51,14 @@ fn main() {
     let program_str = _pg_cat;
 
     let program = parse(program_str);
-    let jump_map = create_jump_map(&program);
-
     debugln!("{:?}", program);
-    debugln!("{:?}", jump_map);
 
-    let mut input = VecDeque::<CellData>::new();
+    let mut input = Vec::<CellData>::new();
     for c in input_str.bytes() {
-        input.push_back(c);
+        input.push(c);
     }
 
-    //let mut tape = VecDeque::<u8>::new();
-    let mut tape: Vec<CellData> = vec![0];
-    let mut ptr: usize = 0;
-    let mut ip: usize = 0;
-
-    let mut op_count = 0;
-
-    while ip < program.len() {
-        match program[ip] {
-            Op::Add(amt) => tape[ptr] = tape[ptr].wrapping_add(amt),
-            Op::Sub(amt) => tape[ptr] = tape[ptr].wrapping_sub(amt),
-            Op::Move(amt) => {
-                // ptr += amt as ussize
-                if (amt < 0) & (ptr < -amt as usize) {
-                    panic!("instruction pointer underflow at char {}", ip);
-                }
-                ptr = ptr.wrapping_add(amt as usize);
-                while ptr >= tape.len() {
-                    tape.push(0);
-                }
-            }
-            Op::Print => {
-                print!("{}", tape[ptr] as char);
-                io::stdout().flush().unwrap();
-            }
-            Op::Input => match input.pop_front() {
-                Some(v) => tape[ptr] = v,
-                None => tape[ptr] = INPUT_END_VAL,
-            },
-            Op::JumpIfZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] == 0 {
-                    ip = jump_map[&jump_to];
-                }
-            }
-            Op::JumpIfNonZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] != 0 {
-                    ip = jump_map[&jump_to];
-                }
-            }
-        }
-        debugln!("{:?} {:?}", program[ip], tape);
-        ip += 1;
-        op_count += 1;
-        if (MAX_OPS > 0) & (op_count > MAX_OPS) {
-            println!("\nProgram took too long lol");
-            break;
-        }
-    }
+    interpret(&program, &input);
 }
 
 fn parse(program_str: &str) -> Vec<Op> {
@@ -150,6 +100,7 @@ fn parse(program_str: &str) -> Vec<Op> {
     program
 }
 
+
 fn create_jump_map(program: &[Op]) -> HashMap<isize, usize> {
     let mut jump_map = HashMap::new();
     for (i, op) in program.iter().enumerate() {
@@ -162,4 +113,58 @@ fn create_jump_map(program: &[Op]) -> HashMap<isize, usize> {
         }
     }
     jump_map
+}
+
+
+fn interpret(program: &[Op], input: &[CellData]) {
+    let mut tape: Vec<CellData> = vec![0];
+    let mut ptr: usize = 0;
+    let mut ip: usize = 0;
+    let mut input_idx: usize = 0;
+    let jump_map = create_jump_map(&program);
+
+    let mut op_count = 0;
+    while ip < program.len() {
+        match program[ip] {
+            Op::Add(amt) => tape[ptr] = tape[ptr].wrapping_add(amt),
+            Op::Sub(amt) => tape[ptr] = tape[ptr].wrapping_sub(amt),
+            Op::Move(amt) => {
+                // ptr += amt as ussize
+                if (amt < 0) & (ptr < -amt as usize) {
+                    panic!("instruction pointer underflow at char {}", ip);
+                }
+                ptr = ptr.wrapping_add(amt as usize);
+                while ptr >= tape.len() {
+                    tape.push(0);
+                }
+            }
+            Op::Print => {
+                print!("{}", tape[ptr] as char);
+                io::stdout().flush().unwrap();
+            }
+            Op::Input => match input.get(input_idx) {
+                Some(v) => {
+                    input_idx += 1;
+                    tape[ptr] = *v
+                }
+                None => tape[ptr] = INPUT_END_VAL,
+            },
+            Op::JumpIfZero(Jump { here: _, jump_to }) => {
+                if tape[ptr] == 0 {
+                    ip = jump_map[&jump_to];
+                }
+            }
+            Op::JumpIfNonZero(Jump { here: _, jump_to }) => {
+                if tape[ptr] != 0 {
+                    ip = jump_map[&jump_to];
+                }
+            }
+        }
+        debugln!("{:?} {:?}", program[ip], tape);
+        ip += 1;
+        op_count += 1;
+        if (MAX_OPS > 0) & (op_count > MAX_OPS) {
+            panic!("\nProgram took too long lol");
+        }
+    }
 }
