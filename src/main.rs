@@ -1,3 +1,5 @@
+#![deny(clippy::all, clippy::nursery)]
+
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io::{self, Write};
