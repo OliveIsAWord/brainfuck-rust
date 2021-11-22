@@ -148,7 +148,7 @@ fn parse(program_str: &str) -> Vec<Op> {
     program
 }
 
-fn create_jump_map(program: &Vec<Op>) -> HashMap<isize, usize> {
+fn create_jump_map(program: &[Op]) -> HashMap<isize, usize> {
     let mut jump_map = HashMap::new();
     for (i, op) in program.iter().enumerate() {
         match op {
