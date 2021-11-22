@@ -72,7 +72,7 @@ fn main() {
                 Some(jump_to) => {
                     program.push(Op::JumpIfNonZero(Jump {
                         here: -jump_to,
-                        jump_to: jump_to,
+                        jump_to,
                     }));
                 }
                 None => {
@@ -104,7 +104,7 @@ fn main() {
     }
 
     //let mut tape = VecDeque::<u8>::new();
-    let mut tape = vec![0 as CellData];
+    let mut tape: Vec<CellData> = vec![0];
     let mut ptr: usize = 0;
     let mut ip: usize = 0;
 
@@ -142,7 +142,6 @@ fn main() {
                     ip = jump_map[&jump_to];
                 }
             }
-            //_ => println!("wtf"),
         }
         debugln!("{:?} {:?}", program[ip], tape);
         ip += 1;
