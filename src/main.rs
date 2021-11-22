@@ -1,19 +1,9 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io::{self, Write};
-use std::num::Wrapping;
 
-type CellData = Wrapping<u8>;
-
-macro_rules! wrap_data {
-    ($arg:expr) => {
-        Wrapping::<u8>($arg)
-    };
-}
-
-const VAL_ZERO: CellData = wrap_data!(0);
-const VAL_ONE: CellData = wrap_data!(1);
-const VAL_MINUS_ONE: CellData = wrap_data!(255);
+type CellData = u8;
+const INPUT_END_VAL: CellData = CellData::MAX;
 
 const DEBUG: bool = false;
 const MAX_OPS: i64 = -1;
@@ -54,6 +44,7 @@ fn main() {
     let _pg_hello_world =
         ">>>>>+[-->-[>>+ >-----<<]< --<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+.";
     let _pg_cat = ",+[-.,+]";
+    let _pg_overflow = "++++++++[->++++++++<]";
     let input_str = "cool cat :3";
     let program_str = _pg_hello_world;
 
@@ -63,8 +54,8 @@ fn main() {
     // TODO: explicitly check unmatched []
     for c in program_str.chars() {
         match c {
-            '+' => program.push(Op::Add(VAL_ONE)),
-            '-' => program.push(Op::Sub(VAL_ONE)),
+            '+' => program.push(Op::Add(1)),
+            '-' => program.push(Op::Sub(1)),
             '>' => program.push(Op::Move(1)),
             '<' => program.push(Op::Move(-1)),
             '.' => program.push(Op::Print),
@@ -108,12 +99,12 @@ fn main() {
     debugln!("{:?}", jump_map);
 
     let mut input = VecDeque::<CellData>::new();
-    for c in input_str.chars() {
-        input.push_back(wrap_data!(c as u8));
+    for c in input_str.bytes() {
+        input.push_back(c);
     }
 
     //let mut tape = VecDeque::<u8>::new();
-    let mut tape = vec![VAL_ZERO];
+    let mut tape = vec![0 as CellData];
     let mut ptr: usize = 0;
     let mut ip: usize = 0;
 
@@ -121,8 +112,8 @@ fn main() {
 
     while ip < program.len() {
         match program[ip] {
-            Op::Add(amt) => tape[ptr] += amt,
-            Op::Sub(amt) => tape[ptr] -= amt,
+            Op::Add(amt) => tape[ptr] = tape[ptr].wrapping_add(amt),
+            Op::Sub(amt) => tape[ptr] = tape[ptr].wrapping_sub(amt),
             Op::Move(amt) => {
                 // ptr += amt as ussize
                 if (amt < 0) & (ptr < -amt as usize) {
@@ -130,24 +121,24 @@ fn main() {
                 }
                 ptr = ptr.wrapping_add(amt as usize);
                 while ptr >= tape.len() {
-                    tape.push(VAL_ZERO);
+                    tape.push(0);
                 }
             }
             Op::Print => {
-                print!("{}", tape[ptr].0 as char);
+                print!("{}", tape[ptr] as char);
                 io::stdout().flush().unwrap();
             }
             Op::Input => match input.pop_front() {
                 Some(v) => tape[ptr] = v,
-                None => tape[ptr] = VAL_MINUS_ONE,
+                None => tape[ptr] = INPUT_END_VAL,
             },
             Op::JumpIfZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] == VAL_ZERO {
+                if tape[ptr] == 0 {
                     ip = jump_map[&jump_to];
                 }
             }
             Op::JumpIfNonZero(Jump { here: _, jump_to }) => {
-                if tape[ptr] != VAL_ZERO {
+                if tape[ptr] != 0 {
                     ip = jump_map[&jump_to];
                 }
             }
