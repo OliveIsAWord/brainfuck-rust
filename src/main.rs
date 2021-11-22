@@ -21,14 +21,14 @@ macro_rules! debugln {
 //     println!("{}", std::any::type_name::<T>())
 // }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Jump {
     here: isize, // location/index of instruction
     jump_to: isize, // location/index to conditionally jump to
                  // positive numbers indicate start of loops, negative numbers indicate end of loops
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Op {
     Add(CellData),
     Sub(CellData),
@@ -46,54 +46,10 @@ fn main() {
     let _pg_cat = ",+[-.,+]";
     let _pg_overflow = "++++++++[->++++++++<]";
     let input_str = "cool cat :3";
-    let program_str = _pg_hello_world;
+    let program_str = _pg_cat;
 
-    let mut program = Vec::<Op>::new();
-    let mut jump_index: isize = 1;
-    let mut jump_stack = Vec::new();
-    // TODO: explicitly check unmatched []
-    for c in program_str.chars() {
-        match c {
-            '+' => program.push(Op::Add(1)),
-            '-' => program.push(Op::Sub(1)),
-            '>' => program.push(Op::Move(1)),
-            '<' => program.push(Op::Move(-1)),
-            '.' => program.push(Op::Print),
-            ',' => program.push(Op::Input),
-            '[' => {
-                program.push(Op::JumpIfZero(Jump {
-                    here: jump_index,
-                    jump_to: -jump_index,
-                }));
-                jump_stack.push(jump_index);
-                jump_index += 1;
-            }
-            ']' => match jump_stack.pop() {
-                Some(jump_to) => {
-                    program.push(Op::JumpIfNonZero(Jump {
-                        here: -jump_to,
-                        jump_to,
-                    }));
-                }
-                None => {
-                    panic!("Unmatched closing bracket");
-                }
-            },
-
-            _ => (), // all other characters are treated as comments
-        }
-    }
-
-    let mut jump_map = HashMap::new();
-    for (i, op) in program.iter().enumerate() {
-        match op {
-            Op::JumpIfZero(Jump { here, jump_to: _ })
-            | Op::JumpIfNonZero(Jump { here, jump_to: _ }) => {
-                jump_map.insert(here, i);
-            }
-            _ => (),
-        }
-    }
+    let program = parse(program_str);
+    let jump_map = create_jump_map(&program);
 
     debugln!("{:?}", program);
     debugln!("{:?}", jump_map);
@@ -151,4 +107,57 @@ fn main() {
             break;
         }
     }
+}
+
+fn parse(program_str: &str) -> Vec<Op> {
+    let mut program = Vec::<Op>::new();
+    let mut jump_index: isize = 1;
+    let mut jump_stack = Vec::new();
+    // TODO: explicitly check unmatched []
+    for c in program_str.chars() {
+        match c {
+            '+' => program.push(Op::Add(1)),
+            '-' => program.push(Op::Sub(1)),
+            '>' => program.push(Op::Move(1)),
+            '<' => program.push(Op::Move(-1)),
+            '.' => program.push(Op::Print),
+            ',' => program.push(Op::Input),
+            '[' => {
+                program.push(Op::JumpIfZero(Jump {
+                    here: jump_index,
+                    jump_to: -jump_index,
+                }));
+                jump_stack.push(jump_index);
+                jump_index += 1;
+            }
+            ']' => match jump_stack.pop() {
+                Some(jump_to) => {
+                    program.push(Op::JumpIfNonZero(Jump {
+                        here: -jump_to,
+                        jump_to,
+                    }));
+                }
+                None => {
+                    panic!("Unmatched closing bracket");
+                }
+            },
+
+            _ => (), // all other characters are treated as comments
+        }
+    }
+    program
+}
+
+fn create_jump_map(program: &Vec<Op>) -> HashMap<isize, usize> {
+    let mut jump_map = HashMap::new();
+    for (i, op) in program.iter().enumerate() {
+        match op {
+            Op::JumpIfZero(Jump { here, jump_to: _ })
+            | Op::JumpIfNonZero(Jump { here, jump_to: _ }) => {
+                jump_map.insert(*here, i);
+            }
+            _ => (),
+        }
+    }
+    jump_map
 }
